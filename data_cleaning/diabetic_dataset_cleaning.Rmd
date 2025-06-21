@@ -1,0 +1,185 @@
+---
+title: "Diabetic_dataset_clean"
+author: "pasindu"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r}
+# Load necessary libraries
+library(tidyverse)
+library(ggplot2)
+#library(caret)
+library(naniar)
+library(GGally)
+library(gridExtra)
+
+# Read the dataset
+diabetes_data <- read.csv("diabetes_prediction_dataset.csv")
+
+# Initial exploration
+str(diabetes_data)
+summary(diabetes_data)
+
+# Check for missing values
+miss_var_summary(diabetes_data)
+
+# Visualize missing data
+gg_miss_var(diabetes_data) + 
+  labs(title = "Missing Values by Variable")
+
+# Handle missing values - we'll examine each variable
+
+## Age - check for unreasonable values
+summary(diabetes_data$age)
+ggplot(diabetes_data, aes(x = age)) + 
+  geom_histogram(bins = 30, fill = "steelblue") +
+  labs(title = "Age Distribution", x = "Age", y = "Count")
+
+## Gender - check categories
+table(diabetes_data$gender)
+# Standardize gender categories
+diabetes_data <- diabetes_data %>%
+  mutate(gender = case_when(
+    tolower(gender) %in% c("female", "f") ~ "Female",
+    tolower(gender) %in% c("male", "m") ~ "Male",
+    TRUE ~ as.character(gender)  # Keep other categories as is
+  ))
+
+## Hypertension and heart_disease - should be binary (0/1)
+table(diabetes_data$hypertension)
+table(diabetes_data$heart_disease)
+
+## Smoking history - standardize categories
+table(diabetes_data$smoking_history)
+diabetes_data <- diabetes_data %>%
+  mutate(smoking_history = case_when(
+    tolower(smoking_history) %in% c("never", "no info") ~ smoking_history,
+    tolower(smoking_history) %in% c("current", "not current", "former", "ever") ~ smoking_history,
+    TRUE ~ "No Info"  # Default for any other values
+  ))
+
+## BMI - check for outliers
+summary(diabetes_data$bmi)
+ggplot(diabetes_data, aes(y = bmi)) + 
+  geom_boxplot(fill = "steelblue") +
+  labs(title = "BMI Distribution")
+
+# Handle extreme BMI values (keeping realistic range 10-70)
+diabetes_data <- diabetes_data %>%
+  mutate(bmi = ifelse(bmi < 10 | bmi > 70, median(bmi, na.rm = TRUE), bmi))
+
+## HbA1c_level - check distribution
+summary(diabetes_data$HbA1c_level)
+ggplot(diabetes_data, aes(x = HbA1c_level)) + 
+  geom_histogram(bins = 30, fill = "steelblue") +
+  labs(title = "HbA1c Level Distribution")
+
+# Handle extreme HbA1c values (keeping range 3-15)
+diabetes_data <- diabetes_data %>%
+  mutate(HbA1c_level = ifelse(HbA1c_level < 3 | HbA1c_level > 15, 
+                              median(HbA1c_level, na.rm = TRUE), 
+                              HbA1c_level))
+
+## blood_glucose_level - check distribution
+summary(diabetes_data$blood_glucose_level)
+ggplot(diabetes_data, aes(x = blood_glucose_level)) + 
+  geom_histogram(bins = 30, fill = "steelblue") +
+  labs(title = "Blood Glucose Level Distribution")
+
+# Handle extreme glucose values (keeping range 50-300)
+diabetes_data <- diabetes_data %>%
+  mutate(blood_glucose_level = ifelse(blood_glucose_level < 50 | blood_glucose_level > 300, 
+                                     median(blood_glucose_level, na.rm = TRUE), 
+                                     blood_glucose_level))
+
+## Diabetes - ensure binary (0/1)
+table(diabetes_data$diabetes)
+
+# Feature Engineering
+# Create age groups
+diabetes_data <- diabetes_data %>%
+  mutate(age_group = case_when(
+    age < 18 ~ "Child",
+    age >= 18 & age < 30 ~ "Young Adult",
+    age >= 30 & age < 45 ~ "Adult",
+    age >= 45 & age < 60 ~ "Middle-aged",
+    age >= 60 ~ "Senior"
+  ))
+
+# BMI categories
+diabetes_data <- diabetes_data %>%
+  mutate(bmi_category = case_when(
+    bmi < 18.5 ~ "Underweight",
+    bmi >= 18.5 & bmi < 25 ~ "Normal",
+    bmi >= 25 & bmi < 30 ~ "Overweight",
+    bmi >= 30 ~ "Obese"
+  ))
+
+# Convert categorical variables to factors
+diabetes_data <- diabetes_data %>%
+  mutate(
+    gender = as.factor(gender),
+    hypertension = as.factor(hypertension),
+    heart_disease = as.factor(heart_disease),
+    smoking_history = as.factor(smoking_history),
+    diabetes = as.factor(diabetes),
+    age_group = as.factor(age_group),
+    bmi_category = as.factor(bmi_category)
+  )
+
+# Data Visualization
+
+# 1. Diabetes distribution
+p1 <- ggplot(diabetes_data, aes(x = diabetes, fill = diabetes)) +
+  geom_bar() +
+  labs(title = "Diabetes Distribution", x = "Diabetes", y = "Count") +
+  theme_minimal()
+
+# 2. Age distribution by diabetes status
+p2 <- ggplot(diabetes_data, aes(x = age, fill = diabetes)) +
+  geom_histogram(bins = 30, position = "identity", alpha = 0.6) +
+  labs(title = "Age Distribution by Diabetes Status", x = "Age", y = "Count") +
+  theme_minimal()
+
+# 3. BMI vs Blood Glucose Level colored by diabetes
+p3 <- ggplot(diabetes_data, aes(x = bmi, y = blood_glucose_level, color = diabetes)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "BMI vs Blood Glucose Level", x = "BMI", y = "Blood Glucose Level") +
+  theme_minimal()
+
+# 4. HbA1c vs Blood Glucose Level colored by diabetes
+p4 <- ggplot(diabetes_data, aes(x = HbA1c_level, y = blood_glucose_level, color = diabetes)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "HbA1c vs Blood Glucose Level", x = "HbA1c Level", y = "Blood Glucose Level") +
+  theme_minimal()
+
+# 5. Diabetes by age group
+p5 <- ggplot(diabetes_data, aes(x = age_group, fill = diabetes)) +
+  geom_bar(position = "fill") +
+  labs(title = "Diabetes Prevalence by Age Group", x = "Age Group", y = "Proportion") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# 6. Diabetes by BMI category
+p6 <- ggplot(diabetes_data, aes(x = bmi_category, fill = diabetes)) +
+  geom_bar(position = "fill") +
+  labs(title = "Diabetes Prevalence by BMI Category", x = "BMI Category", y = "Proportion") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Arrange plots
+grid.arrange(p1, p2, p3, p4, p5, p6, ncol = 2)
+
+# Correlation matrix for numeric variables
+numeric_vars <- diabetes_data %>%
+  select(age, bmi, HbA1c_level, blood_glucose_level)
+
+ggcorr(numeric_vars, label = TRUE, label_size = 3, label_round = 2) +
+  labs(title = "Correlation Matrix of Numeric Variables")
+
+# Feature importance visualization (using random forest for demonstration)
+set.seed(123)
+write.csv(diabetes_data, "diabetes_data_preprocessed.csv", row.names = FALSE)
+
+```

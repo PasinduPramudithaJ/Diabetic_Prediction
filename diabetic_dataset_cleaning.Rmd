@@ -1,0 +1,126 @@
+---
+title: "Diabetic_dataset_clean"
+author: "pasindu"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r}
+# Load necessary libraries
+library(tidyverse)
+library(caret,recipes)
+
+# Read the dataset
+diabetes_data <- read.csv("diabetes_prediction_dataset.csv")
+
+# Initial exploration
+str(diabetes_data)
+summary(diabetes_data)
+
+## Data Cleaning Steps
+
+# 1. Handle missing values
+# Check for missing values
+colSums(is.na(diabetes_data))
+
+# For this dataset, missing values appear to be coded as "No Info" in smoking_history
+# Convert "No Info" to NA for proper handling
+diabetes_data <- diabetes_data %>%
+  mutate(smoking_history = ifelse(smoking_history == "No Info", NA, smoking_history))
+
+# Check for empty strings or other missing value representations
+diabetes_data <- diabetes_data %>%
+  mutate(across(where(is.character), ~na_if(., "")))
+
+# Check missing values again
+colSums(is.na(diabetes_data))
+
+# For numeric columns, we'll impute missing values with median (less sensitive to outliers)
+numeric_cols <- c("age", "bmi", "HbA1c_level", "blood_glucose_level")
+diabetes_data <- diabetes_data %>%
+  mutate(across(all_of(numeric_cols), ~ifelse(is.na(.), median(., na.rm = TRUE), .)))
+
+# For categorical columns, we'll impute with mode
+get_mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+diabetes_data <- diabetes_data %>%
+  mutate(smoking_history = ifelse(is.na(smoking_history), 
+                                 get_mode(smoking_history), 
+                                 smoking_history))
+
+# 2. Handle outliers
+# Visualize numeric variables for outliers
+boxplot(diabetes_data$age, main = "Age")
+boxplot(diabetes_data$bmi, main = "BMI")
+boxplot(diabetes_data$HbA1c_level, main = "HbA1c Level")
+boxplot(diabetes_data$blood_glucose_level, main = "Blood Glucose Level")
+
+# Handle extreme BMI values - cap at 50 (clinical extreme obesity threshold)
+diabetes_data <- diabetes_data %>%
+  mutate(bmi = ifelse(bmi > 50, 50, bmi))
+
+# Handle extreme age values - assuming reasonable range is 0-120
+diabetes_data <- diabetes_data %>%
+  mutate(age = ifelse(age < 0 | age > 120, median(age), age))
+
+# 3. Handle inconsistencies
+# Check categorical variables for consistency
+table(diabetes_data$gender)
+table(diabetes_data$smoking_history)
+
+# Standardize smoking_history categories
+diabetes_data <- diabetes_data %>%
+  mutate(smoking_history = case_when(
+    smoking_history %in% c("never", "Never") ~ "never",
+    smoking_history %in% c("former", "Former") ~ "former",
+    smoking_history %in% c("current", "Current") ~ "current",
+    smoking_history %in% c("not current", "Not current") ~ "not current",
+    smoking_history %in% c("ever", "Ever") ~ "ever",
+    TRUE ~ smoking_history
+  ))
+
+# 4. Feature engineering and preprocessing
+# Convert categorical variables to factors
+diabetes_data <- diabetes_data %>%
+  mutate(
+    gender = as.factor(gender),
+    smoking_history = as.factor(smoking_history),
+    hypertension = as.factor(hypertension),
+    heart_disease = as.factor(heart_disease),
+    diabetes = as.factor(diabetes)
+  )
+
+# Create age groups
+diabetes_data <- diabetes_data %>%
+  mutate(age_group = cut(age, 
+                         breaks = c(0, 18, 30, 45, 60, 75, 120),
+                         labels = c("0-18", "19-30", "31-45", "46-60", "61-75", "75+")))
+
+# Create BMI categories
+diabetes_data <- diabetes_data %>%
+  mutate(bmi_category = cut(bmi,
+                           breaks = c(0, 18.5, 25, 30, 35, 40, Inf),
+                           labels = c("Underweight", "Normal", "Overweight", 
+                                     "Obese I", "Obese II", "Obese III")))
+
+# 5. Feature selection
+# Remove unnecessary columns if any
+diabetes_data <- diabetes_data %>%
+  select(-age_group, -bmi_category) # These were just examples, we might keep them
+
+# 6. Normalization (optional - many models don't require it)
+# If needed, we can normalize numeric features
+preProcValues <- preProcess(diabetes_data[, numeric_cols], method = c("center", "scale"))
+diabetes_data[, numeric_cols] <- predict(preProcValues, diabetes_data[, numeric_cols])
+
+# 7. Final check
+str(diabetes_data)
+summary(diabetes_data)
+
+# Save cleaned data
+write.csv(diabetes_data, "diabetes_data_cleaned.csv", row.names = FALSE)
+
+```
