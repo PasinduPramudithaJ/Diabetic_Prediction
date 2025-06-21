@@ -16,6 +16,7 @@ library(gridExtra)
 
 # Read the dataset
 diabetes_data <- read.csv("diabetes_prediction_dataset.csv")
+diabetes_data<-na.omit(diabetes_data)
 
 # Initial exploration
 str(diabetes_data)
