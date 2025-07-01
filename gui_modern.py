@@ -116,7 +116,7 @@ class DiabetesPredictorApp:
         # Footer
         self.footer_label = tk.Label(
             root,
-            text="© 2023 Diabetes Prediction System | For educational purposes only",
+            text="© 2025 Diabetes Prediction System | For educational purposes only",
             font=("Helvetica", 8),
             fg=TEXT_COLOR,
             bg=BG_COLOR
